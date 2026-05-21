@@ -12,7 +12,7 @@ st.set_page_config(page_title="Smart Navigation Dashboard", layout="wide")
 # =========================
 @st.cache_data
 def load_data():
-    df = pd.read_csv("Hasil kuesioner.csv")  # SESUAI NAMA FILE KAMU
+    df = pd.read_csv("hasil_kuesioner.csv")  # SESUAI NAMA FILE KAMU
     return df
 
 df = load_data()
