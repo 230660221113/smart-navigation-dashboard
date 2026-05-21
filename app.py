@@ -11,28 +11,28 @@ st.set_page_config(
 )
 
 # =========================
-# LOAD DATA (FIXED VERSION)
+# LOAD DATA (FIXED TOTAL)
 # =========================
 @st.cache_data
 def load_data():
     try:
-        # Auto-detect separator + handle encoding error
         df = pd.read_csv(
             "hasil_kuesioner.csv",
-            sep=None,
+            sep="\t",                 # karena file kamu TAB-separated
             engine="python",
-            encoding="latin1"
+            encoding="latin1",       # aman untuk Excel Indonesia
+            on_bad_lines="skip"      # skip baris yang rusak
         )
         return df
 
     except Exception as e:
-        st.error("Gagal membaca file CSV. Cek format atau encoding file.")
+        st.error("Gagal membaca file dataset. Periksa format file CSV/TSV kamu.")
         st.exception(e)
         return pd.DataFrame()
 
 df = load_data()
 
-# Stop jika data kosong
+# Stop kalau data kosong
 if df.empty:
     st.stop()
 
@@ -57,7 +57,7 @@ x_cols = [c for c in df.columns if str(c).strip().upper().startswith("X")]
 y_cols = [c for c in df.columns if str(c).strip().upper().startswith("Y")]
 
 # =========================
-# RINGKASAN
+# RINGKASAN DATA
 # =========================
 st.subheader("Ringkasan Data")
 
@@ -83,7 +83,7 @@ if len(x_cols) > 0:
     )
     st.plotly_chart(fig_x, use_container_width=True)
 else:
-    st.warning("Kolom X tidak ditemukan di dataset.")
+    st.warning("Kolom X tidak terdeteksi (cek penamaan kolom di dataset).")
 
 # =========================
 # VARIABEL Y
@@ -100,7 +100,7 @@ if len(y_cols) > 0:
     )
     st.plotly_chart(fig_y, use_container_width=True)
 else:
-    st.warning("Kolom Y tidak ditemukan di dataset.")
+    st.warning("Kolom Y tidak terdeteksi (cek penamaan kolom di dataset).")
 
 # =========================
 # HUBUNGAN X vs Y
@@ -119,7 +119,7 @@ if len(x_cols) > 0 and len(y_cols) > 0:
         st.plotly_chart(fig_scatter, use_container_width=True)
 
     except Exception:
-        # fallback kalau statsmodels belum terinstall
+        # fallback kalau statsmodels tidak ada
         fig_scatter = px.scatter(
             df,
             x=x_cols[0],
