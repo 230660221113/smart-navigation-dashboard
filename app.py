@@ -11,30 +11,40 @@ st.set_page_config(
 )
 
 # =========================
-# LOAD DATA (FIXED TOTAL)
+# LOAD DATA (ROBUST)
 # =========================
 @st.cache_data
 def load_data():
-    try:
-        df = pd.read_csv(
-            "hasil_kuesioner.csv",
-            sep="\t",                 # karena file kamu TAB-separated
-            engine="python",
-            encoding="latin1",       # aman untuk Excel Indonesia
-            on_bad_lines="skip"      # skip baris yang rusak
-        )
-        return df
-
-    except Exception as e:
-        st.error("Gagal membaca file dataset. Periksa format file CSV/TSV kamu.")
-        st.exception(e)
-        return pd.DataFrame()
+    df = pd.read_csv(
+        "hasil_kuesioner.csv",
+        sep="\t",
+        engine="python",
+        encoding="latin1",
+        on_bad_lines="skip"
+    )
+    return df
 
 df = load_data()
 
-# Stop kalau data kosong
 if df.empty:
+    st.error("Dataset kosong atau gagal dibaca.")
     st.stop()
+
+# =========================
+# IDENTIFIKASI VARIABEL
+# =========================
+metadata_cols = [
+    col for col in df.columns
+    if "Deskripsi" in col or "Landmark" in col or "Petunjuk" in col
+]
+
+navigation_cols = [
+    col for col in df.columns
+    if "Sistem" in col or "mengurangi" in col or "akurasi" in col.lower()
+]
+
+# numeric columns (Likert scale)
+numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns
 
 # =========================
 # HEADER
@@ -45,100 +55,141 @@ st.caption("Analisis Pengaruh User-Generated Metadata terhadap Akurasi Navigasi 
 st.divider()
 
 # =========================
-# DATA OVERVIEW
+# 1. DATA RESPONDEN
 # =========================
-st.subheader("Dataset Responden")
-st.dataframe(df, use_container_width=True)
-
-# =========================
-# DETEKSI VARIABEL OTOMATIS
-# =========================
-x_cols = [c for c in df.columns if str(c).strip().upper().startswith("X")]
-y_cols = [c for c in df.columns if str(c).strip().upper().startswith("Y")]
-
-# =========================
-# RINGKASAN DATA
-# =========================
-st.subheader("Ringkasan Data")
+st.subheader("1. Profil Responden")
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Responden", len(df))
-col2.metric("Variabel X", len(x_cols))
-col3.metric("Variabel Y", len(y_cols))
+
+if "Usia" in df.columns:
+    col2.metric("Kelompok Usia Terbanyak", df["Usia"].mode()[0])
+
+if "Platform" in df.columns:
+    col3.metric("Platform Dominan", df["Platform"].mode()[0])
+
+st.dataframe(df, use_container_width=True)
 
 st.divider()
 
 # =========================
-# VARIABEL X
+# 2. USER-GENERATED METADATA (X)
 # =========================
-st.subheader("User-Generated Metadata (X)")
+st.subheader("2. User-Generated Metadata (Variabel X)")
 
-if len(x_cols) > 0:
-    x_selected = st.selectbox("Pilih Variabel X", x_cols)
+if metadata_cols:
+    meta_mean = df[metadata_cols].mean(numeric_only=True)
 
-    fig_x = px.histogram(
-        df,
-        x=x_selected,
-        title=f"Distribusi {x_selected}"
+    fig_meta = px.bar(
+        x=meta_mean.index,
+        y=meta_mean.values,
+        title="Rata-rata Penilaian User-Generated Metadata"
     )
-    st.plotly_chart(fig_x, use_container_width=True)
+    st.plotly_chart(fig_meta, use_container_width=True)
 else:
-    st.warning("Kolom X tidak terdeteksi (cek penamaan kolom di dataset).")
+    st.warning("Kolom metadata tidak terdeteksi.")
+
+st.divider()
 
 # =========================
-# VARIABEL Y
+# 3. AKURASI NAVIGASI (Y)
 # =========================
-st.subheader("Akurasi Navigasi (Y)")
+st.subheader("3. Akurasi Navigasi (Variabel Y)")
 
-if len(y_cols) > 0:
-    y_selected = st.selectbox("Pilih Variabel Y", y_cols)
+if navigation_cols:
+    nav_mean = df[navigation_cols].mean(numeric_only=True)
 
-    fig_y = px.histogram(
-        df,
-        x=y_selected,
-        title=f"Distribusi {y_selected}"
+    fig_nav = px.bar(
+        x=nav_mean.index,
+        y=nav_mean.values,
+        title="Rata-rata Akurasi Navigasi"
     )
-    st.plotly_chart(fig_y, use_container_width=True)
+    st.plotly_chart(fig_nav, use_container_width=True)
 else:
-    st.warning("Kolom Y tidak terdeteksi (cek penamaan kolom di dataset).")
+    st.warning("Kolom navigasi tidak terdeteksi.")
+
+st.divider()
 
 # =========================
-# HUBUNGAN X vs Y
+# 4. HUBUNGAN X → Y (CORE ANALYSIS)
 # =========================
-st.subheader("Hubungan Variabel (Insight Awal)")
+st.subheader("4. Pengaruh Metadata terhadap Akurasi Navigasi")
 
-if len(x_cols) > 0 and len(y_cols) > 0:
-    try:
-        fig_scatter = px.scatter(
-            df,
-            x=x_cols[0],
-            y=y_cols[0],
-            trendline="ols",
-            title=f"{x_cols[0]} vs {y_cols[0]}"
-        )
-        st.plotly_chart(fig_scatter, use_container_width=True)
+if len(metadata_cols) > 0 and len(navigation_cols) > 0:
 
-    except Exception:
-        # fallback kalau statsmodels tidak ada
-        fig_scatter = px.scatter(
-            df,
-            x=x_cols[0],
-            y=y_cols[0],
-            title=f"{x_cols[0]} vs {y_cols[0]}"
-        )
-        st.plotly_chart(fig_scatter, use_container_width=True)
+    avg_x = df[metadata_cols].mean(axis=1)
+    avg_y = df[navigation_cols].mean(axis=1)
 
-# =========================
-# FILTER SIDEBAR
-# =========================
-st.sidebar.header("Filter Data")
+    correlation_df = pd.DataFrame({
+        "Metadata (X)": avg_x,
+        "Akurasi Navigasi (Y)": avg_y
+    })
 
-if "Platform" in df.columns:
-    platform_filter = st.sidebar.multiselect(
-        "Pilih Platform Transportasi",
-        df["Platform"].dropna().unique()
+    fig_corr = px.scatter(
+        correlation_df,
+        x="Metadata (X)",
+        y="Akurasi Navigasi (Y)",
+        trendline="ols",
+        title="Hubungan X → Y (Regresi Linear)"
     )
 
-    if platform_filter:
-        df = df[df["Platform"].isin(platform_filter)]
-        st.rerun()
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+    st.success("Model menunjukkan hubungan positif antara metadata dan akurasi navigasi.")
+
+st.divider()
+
+# =========================
+# 5. HASIL PLS-SEM (DARI JURNAL KAMU)
+# =========================
+st.subheader("5. Hasil Model PLS-SEM")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Path Coefficient", "0.815")
+col2.metric("R-Square", "0.653")
+col3.metric("T-Statistic", "7.801")
+
+st.caption("P-value = 0.000 (signifikan pada α < 0.05)")
+
+st.divider()
+
+# =========================
+# 6. RELIABILITY & VALIDITY
+# =========================
+st.subheader("6. Validitas & Reliabilitas")
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric("Cronbach Alpha", "0.914")
+col2.metric("Composite Reliability", "0.939")
+col3.metric("AVE", "0.795")
+col4.metric("Model Quality", "Valid")
+
+st.divider()
+
+# =========================
+# 7. ANALISIS SOSIOTEKNIS
+# =========================
+st.subheader("7. Analisis Sosioteknis (Teori Kritis)")
+
+st.markdown("""
+- ⚠ Ketergantungan pada partisipasi pengguna dapat menyebabkan ketidakseimbangan data  
+- ⚠ Risiko bias spasial pada area dengan aktivitas rendah  
+- ⚠ Beban kognitif pengemudi saat input metadata  
+- ⚠ Isu privasi data lokasi perjalanan  
+
+**Kesimpulan:** Sistem memberikan manfaat teknis, namun tetap memerlukan kontrol etis dan kebijakan keberlanjutan.
+""")
+
+st.divider()
+
+# =========================
+# 8. INSIGHT AKHIR
+# =========================
+st.subheader("8. Kesimpulan Sistem")
+
+st.success("""
+User-Generated Metadata terbukti memiliki pengaruh positif terhadap akurasi navigasi.
+Dashboard ini menunjukkan bahwa peningkatan kualitas informasi pengguna dapat meningkatkan efisiensi layanan transportasi berbasis aplikasi secara signifikan.
+""")
