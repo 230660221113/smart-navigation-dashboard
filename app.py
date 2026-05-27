@@ -44,10 +44,23 @@ h1, h2, h3 {
 
 @st.cache_data
 def load_data():
+
+    # BACA FILE EXCEL
     df = pd.read_excel("Hasil Kuesioner.xlsx")
+
+    # MEMBERSIHKAN NAMA KOLOM
+    df.columns = df.columns.str.strip()
+
     return df
 
 df = load_data()
+
+# =========================================================
+# DEBUG NAMA KOLOM
+# =========================================================
+# HAPUS ATAU COMMENT SETELAH DASHBOARD NORMAL
+
+# st.write(df.columns.tolist())
 
 # =========================================================
 # VARIABEL PENELITIAN
@@ -77,13 +90,22 @@ avg_x = round(df["Rata_X"].mean(), 2)
 avg_y = round(df["Rata_Y"].mean(), 2)
 
 # =========================================================
-# SIDEBAR
+# NAMA KOLOM
+# =========================================================
+
+gender_col = "Jenis Kelamin"
+
+platform_col = "Platform Transportasi Berbasis Aplikasi yang Digunakan"
+
+misleading_col = "Pernah Mengalami Ketidaksesuaian Titik Lokasi (Misleading Points)"
+
+metadata_col = "Pernah Ada Informasi Tambahan dari Pelanggan \n(seperti landmark, deskripsi lokasi, atau petunjuk arah tambahan)"
+
+# =========================================================
+# SIDEBAR FILTER
 # =========================================================
 
 st.sidebar.title("📌 Filter Dashboard")
-
-gender_col = "Jenis Kelamin"
-platform_col = "Platform Transportasi Berbasis Aplikasi yang Digunakan   "
 
 gender_filter = st.sidebar.multiselect(
     "Jenis Kelamin",
@@ -125,10 +147,6 @@ st.markdown("---")
 
 total_responden = len(filtered_df)
 
-misleading_col = "Pernah Mengalami Ketidaksesuaian Titik Lokasi (Misleading Points)   "
-
-metadata_col = "Pernah Ada Informasi Tambahan dari Pelanggan \n(seperti landmark, deskripsi lokasi, atau petunjuk arah tambahan)"
-
 misleading_total = filtered_df[misleading_col].value_counts().get("Pernah", 0)
 
 metadata_total = filtered_df[metadata_col].value_counts().get("Pernah", 0)
@@ -157,6 +175,7 @@ st.header("📊 Profil Responden")
 
 col_a, col_b = st.columns(2)
 
+# PIE CHART GENDER
 with col_a:
 
     gender_data = filtered_df[gender_col].value_counts().reset_index()
@@ -172,6 +191,7 @@ with col_a:
 
     st.plotly_chart(fig_gender, use_container_width=True)
 
+# BAR CHART PLATFORM
 with col_b:
 
     platform_data = filtered_df[platform_col].value_counts().reset_index()
@@ -208,7 +228,7 @@ fig_x = px.bar(
 )
 
 fig_x.update_layout(
-    yaxis_range=[0,5],
+    yaxis_range=[0, 5],
     xaxis_title="Indikator",
     yaxis_title="Rata-rata Skor"
 )
@@ -216,9 +236,9 @@ fig_x.update_layout(
 st.plotly_chart(fig_x, use_container_width=True)
 
 st.info("""
-Visualisasi menunjukkan bahwa metadata pengguna
-seperti landmark, deskripsi lokasi, dan petunjuk arah
-tambahan membantu meningkatkan efektivitas navigasi digital.
+Metadata pengguna seperti landmark,
+deskripsi lokasi, dan petunjuk arah tambahan
+membantu meningkatkan efektivitas navigasi digital.
 """)
 
 st.markdown("---")
@@ -241,7 +261,7 @@ fig_y = px.line(
 )
 
 fig_y.update_layout(
-    yaxis_range=[0,5],
+    yaxis_range=[0, 5],
     xaxis_title="Indikator",
     yaxis_title="Rata-rata Skor"
 )
@@ -249,9 +269,8 @@ fig_y.update_layout(
 st.plotly_chart(fig_y, use_container_width=True)
 
 st.success("""
-Hasil visualisasi menunjukkan bahwa informasi tambahan
-dari pengguna membantu meningkatkan akurasi navigasi
-dan mengurangi misleading points.
+Informasi tambahan dari pengguna membantu
+meningkatkan akurasi navigasi dan mengurangi misleading points.
 """)
 
 st.markdown("---")
@@ -304,10 +323,12 @@ pls_result = pd.DataFrame({
 st.dataframe(pls_result, use_container_width=True)
 
 st.success("""
-Hasil SmartPLS menunjukkan bahwa variabel
-User-Generated Metadata berpengaruh positif
-dan signifikan terhadap Akurasi Navigasi.
+Variabel User-Generated Metadata
+berpengaruh positif dan signifikan
+terhadap Akurasi Navigasi.
 """)
+
+st.markdown("---")
 
 # =========================================================
 # VALIDITAS DAN RELIABILITAS
@@ -329,8 +350,8 @@ st.dataframe(validity_df, use_container_width=True)
 
 st.info("""
 Seluruh variabel memenuhi syarat validitas
-dan reliabilitas karena nilai Cronbach Alpha > 0.70
-dan AVE > 0.50.
+dan reliabilitas karena nilai
+Cronbach Alpha > 0.70 dan AVE > 0.50.
 """)
 
 st.markdown("---")
@@ -376,16 +397,17 @@ fig_outer = px.bar(
 )
 
 fig_outer.update_layout(
-    yaxis_range=[0,1.1]
+    yaxis_range=[0, 1.1]
 )
 
 st.plotly_chart(fig_outer, use_container_width=True)
 
 st.info("""
-Seluruh indikator yang digunakan pada dashboard
-memiliki nilai outer loading > 0.70 sehingga dinyatakan valid.
-Indikator X1.5, Y1, dan Y5 tidak digunakan karena
-tidak memenuhi kriteria validitas konvergen.
+Seluruh indikator memiliki nilai outer loading > 0.70
+sehingga dinyatakan valid.
+
+Indikator X1.5, Y1, dan Y5 tidak digunakan
+karena tidak memenuhi validitas konvergen.
 """)
 
 st.markdown("---")
@@ -402,11 +424,11 @@ highest_y = y_mean.loc[y_mean["Rata-rata"].idxmax()]
 st.write(f"""
 - Indikator metadata tertinggi terdapat pada
 **{highest_x['Indikator']}**
-dengan rata-rata skor **{round(highest_x['Rata-rata'],2)}**.
+dengan rata-rata skor **{round(highest_x['Rata-rata'], 2)}**.
 
 - Indikator akurasi navigasi tertinggi terdapat pada
 **{highest_y['Indikator']}**
-dengan rata-rata skor **{round(highest_y['Rata-rata'],2)}**.
+dengan rata-rata skor **{round(highest_y['Rata-rata'], 2)}**.
 
 - Hasil penelitian menunjukkan bahwa metadata pengguna
 memiliki kontribusi penting dalam meningkatkan
@@ -435,8 +457,7 @@ dan P-value 0.000.
 
 Pemanfaatan landmark, deskripsi lokasi,
 dan petunjuk arah tambahan membantu meningkatkan
-ketepatan identifikasi lokasi dan mengurangi
-misleading points.
+ketepatan identifikasi lokasi dan mengurangi misleading points.
 """)
 
 st.markdown("---")
