@@ -2,194 +2,443 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# =========================
-# CONFIG
-# =========================
+# =========================================================
+# KONFIGURASI HALAMAN
+# =========================================================
+
 st.set_page_config(
     page_title="Smart Navigation Dashboard",
+    page_icon="🛰️",
     layout="wide"
 )
 
-# =========================
-# LOAD DATA (ROBUST)
-# =========================
+# =========================================================
+# CUSTOM CSS
+# =========================================================
+
+st.markdown("""
+<style>
+
+.main {
+    background-color: #f5f7fa;
+}
+
+.stMetric {
+    background-color: white;
+    padding: 15px;
+    border-radius: 15px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
+}
+
+h1, h2, h3 {
+    color: #111827;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# =========================================================
+# LOAD DATA
+# =========================================================
+
 @st.cache_data
 def load_data():
-    df = pd.read_csv(
-        "hasil_kuesioner.csv",
-        sep="\t",
-        engine="python",
-        encoding="latin1",
-        on_bad_lines="skip"
-    )
+    df = pd.read_excel("Hasil Kuesioner.xlsx")
     return df
 
 df = load_data()
 
-if df.empty:
-    st.error("Dataset kosong atau gagal dibaca.")
-    st.stop()
+# =========================================================
+# VARIABEL PENELITIAN
+# =========================================================
 
-# =========================
-# IDENTIFIKASI VARIABEL
-# =========================
-metadata_cols = [
-    col for col in df.columns
-    if "Deskripsi" in col or "Landmark" in col or "Petunjuk" in col
+# Variabel X valid
+x_columns = ["X1.1", "X1.2", "X1.3", "X1.4", "X1.6"]
+
+# Variabel Y valid
+y_columns = ["Y2", "Y3", "Y4", "Y6"]
+
+# =========================================================
+# KONVERSI DATA NUMERIK
+# =========================================================
+
+for col in x_columns + y_columns:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+# =========================================================
+# HITUNG NILAI RATA-RATA
+# =========================================================
+
+df["Rata_X"] = df[x_columns].mean(axis=1)
+df["Rata_Y"] = df[y_columns].mean(axis=1)
+
+avg_x = round(df["Rata_X"].mean(), 2)
+avg_y = round(df["Rata_Y"].mean(), 2)
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+st.sidebar.title("📌 Filter Dashboard")
+
+gender_col = "Jenis Kelamin"
+platform_col = "Platform Transportasi Berbasis Aplikasi yang Digunakan   "
+
+gender_filter = st.sidebar.multiselect(
+    "Jenis Kelamin",
+    options=df[gender_col].dropna().unique(),
+    default=df[gender_col].dropna().unique()
+)
+
+platform_filter = st.sidebar.multiselect(
+    "Platform Transportasi",
+    options=df[platform_col].dropna().unique(),
+    default=df[platform_col].dropna().unique()
+)
+
+filtered_df = df[
+    (df[gender_col].isin(gender_filter)) &
+    (df[platform_col].isin(platform_filter))
 ]
 
-navigation_cols = [
-    col for col in df.columns
-    if "Sistem" in col or "mengurangi" in col or "akurasi" in col.lower()
-]
-
-# numeric columns (Likert scale)
-numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns
-
-# =========================
+# =========================================================
 # HEADER
-# =========================
-st.title("Smart Navigation Dashboard")
-st.caption("Analisis Pengaruh User-Generated Metadata terhadap Akurasi Navigasi Transportasi Online")
+# =========================================================
 
-st.divider()
+st.title("🛰️ Smart Navigation Accuracy Monitoring Dashboard")
 
-# =========================
-# 1. DATA RESPONDEN
-# =========================
-st.subheader("1. Profil Responden")
+st.markdown("""
+### Analisis Pengaruh *User-Generated Metadata* terhadap Akurasi Navigasi Transportasi Berbasis Aplikasi
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Total Responden", len(df))
+Dashboard ini dikembangkan untuk membantu visualisasi
+dan evaluasi hasil penelitian mengenai pengaruh
+*User-Generated Metadata* terhadap akurasi navigasi
+pada layanan transportasi berbasis aplikasi.
+""")
 
-if "Usia" in df.columns:
-    col2.metric("Kelompok Usia Terbanyak", df["Usia"].mode()[0])
+st.markdown("---")
 
-if "Platform" in df.columns:
-    col3.metric("Platform Dominan", df["Platform"].mode()[0])
+# =========================================================
+# KPI CARDS
+# =========================================================
 
-st.dataframe(df, use_container_width=True)
+total_responden = len(filtered_df)
 
-st.divider()
+misleading_col = "Pernah Mengalami Ketidaksesuaian Titik Lokasi (Misleading Points)   "
 
-# =========================
-# 2. USER-GENERATED METADATA (X)
-# =========================
-st.subheader("2. User-Generated Metadata (Variabel X)")
+metadata_col = "Pernah Ada Informasi Tambahan dari Pelanggan \n(seperti landmark, deskripsi lokasi, atau petunjuk arah tambahan)"
 
-if metadata_cols:
-    meta_mean = df[metadata_cols].mean(numeric_only=True)
+misleading_total = filtered_df[misleading_col].value_counts().get("Pernah", 0)
 
-    fig_meta = px.bar(
-        x=meta_mean.index,
-        y=meta_mean.values,
-        title="Rata-rata Penilaian User-Generated Metadata"
-    )
-    st.plotly_chart(fig_meta, use_container_width=True)
-else:
-    st.warning("Kolom metadata tidak terdeteksi.")
-
-st.divider()
-
-# =========================
-# 3. AKURASI NAVIGASI (Y)
-# =========================
-st.subheader("3. Akurasi Navigasi (Variabel Y)")
-
-if navigation_cols:
-    nav_mean = df[navigation_cols].mean(numeric_only=True)
-
-    fig_nav = px.bar(
-        x=nav_mean.index,
-        y=nav_mean.values,
-        title="Rata-rata Akurasi Navigasi"
-    )
-    st.plotly_chart(fig_nav, use_container_width=True)
-else:
-    st.warning("Kolom navigasi tidak terdeteksi.")
-
-st.divider()
-
-# =========================
-# 4. HUBUNGAN X → Y (CORE ANALYSIS)
-# =========================
-st.subheader("4. Pengaruh Metadata terhadap Akurasi Navigasi")
-
-if len(metadata_cols) > 0 and len(navigation_cols) > 0:
-
-    avg_x = df[metadata_cols].mean(axis=1)
-    avg_y = df[navigation_cols].mean(axis=1)
-
-    correlation_df = pd.DataFrame({
-        "Metadata (X)": avg_x,
-        "Akurasi Navigasi (Y)": avg_y
-    })
-
-    fig_corr = px.scatter(
-        correlation_df,
-        x="Metadata (X)",
-        y="Akurasi Navigasi (Y)",
-        trendline="ols",
-        title="Hubungan X → Y (Regresi Linear)"
-    )
-
-    st.plotly_chart(fig_corr, use_container_width=True)
-
-    st.success("Model menunjukkan hubungan positif antara metadata dan akurasi navigasi.")
-
-st.divider()
-
-# =========================
-# 5. HASIL PLS-SEM (DARI JURNAL KAMU)
-# =========================
-st.subheader("5. Hasil Model PLS-SEM")
-
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Path Coefficient", "0.815")
-col2.metric("R-Square", "0.653")
-col3.metric("T-Statistic", "7.801")
-
-st.caption("P-value = 0.000 (signifikan pada α < 0.05)")
-
-st.divider()
-
-# =========================
-# 6. RELIABILITY & VALIDITY
-# =========================
-st.subheader("6. Validitas & Reliabilitas")
+metadata_total = filtered_df[metadata_col].value_counts().get("Pernah", 0)
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Cronbach Alpha", "0.914")
-col2.metric("Composite Reliability", "0.939")
-col3.metric("AVE", "0.795")
-col4.metric("Model Quality", "Valid")
+with col1:
+    st.metric("Total Responden", total_responden)
 
-st.divider()
+with col2:
+    st.metric("Rata-rata Metadata", avg_x)
 
-# =========================
-# 7. ANALISIS SOSIOTEKNIS
-# =========================
-st.subheader("7. Analisis Sosioteknis (Teori Kritis)")
+with col3:
+    st.metric("Rata-rata Akurasi", avg_y)
 
-st.markdown("""
-- ⚠ Ketergantungan pada partisipasi pengguna dapat menyebabkan ketidakseimbangan data  
-- ⚠ Risiko bias spasial pada area dengan aktivitas rendah  
-- ⚠ Beban kognitif pengemudi saat input metadata  
-- ⚠ Isu privasi data lokasi perjalanan  
+with col4:
+    st.metric("Misleading Points", misleading_total)
 
-**Kesimpulan:** Sistem memberikan manfaat teknis, namun tetap memerlukan kontrol etis dan kebijakan keberlanjutan.
+st.markdown("---")
+
+# =========================================================
+# PROFIL RESPONDEN
+# =========================================================
+
+st.header("📊 Profil Responden")
+
+col_a, col_b = st.columns(2)
+
+with col_a:
+
+    gender_data = filtered_df[gender_col].value_counts().reset_index()
+    gender_data.columns = ["Jenis Kelamin", "Jumlah"]
+
+    fig_gender = px.pie(
+        gender_data,
+        names="Jenis Kelamin",
+        values="Jumlah",
+        hole=0.5,
+        title="Distribusi Jenis Kelamin"
+    )
+
+    st.plotly_chart(fig_gender, use_container_width=True)
+
+with col_b:
+
+    platform_data = filtered_df[platform_col].value_counts().reset_index()
+    platform_data.columns = ["Platform", "Jumlah"]
+
+    fig_platform = px.bar(
+        platform_data,
+        x="Platform",
+        y="Jumlah",
+        text_auto=True,
+        title="Platform Transportasi yang Digunakan"
+    )
+
+    st.plotly_chart(fig_platform, use_container_width=True)
+
+st.markdown("---")
+
+# =========================================================
+# ANALISIS USER GENERATED METADATA
+# =========================================================
+
+st.header("📍 Analisis User-Generated Metadata (Variabel X)")
+
+x_mean = filtered_df[x_columns].mean().reset_index()
+x_mean.columns = ["Indikator", "Rata-rata"]
+
+fig_x = px.bar(
+    x_mean,
+    x="Indikator",
+    y="Rata-rata",
+    color="Rata-rata",
+    text_auto=".2f",
+    title="Efektivitas User-Generated Metadata"
+)
+
+fig_x.update_layout(
+    yaxis_range=[0,5],
+    xaxis_title="Indikator",
+    yaxis_title="Rata-rata Skor"
+)
+
+st.plotly_chart(fig_x, use_container_width=True)
+
+st.info("""
+Visualisasi menunjukkan bahwa metadata pengguna
+seperti landmark, deskripsi lokasi, dan petunjuk arah
+tambahan membantu meningkatkan efektivitas navigasi digital.
 """)
 
-st.divider()
+st.markdown("---")
 
-# =========================
-# 8. INSIGHT AKHIR
-# =========================
-st.subheader("8. Kesimpulan Sistem")
+# =========================================================
+# ANALISIS AKURASI NAVIGASI
+# =========================================================
+
+st.header("🧭 Analisis Akurasi Navigasi (Variabel Y)")
+
+y_mean = filtered_df[y_columns].mean().reset_index()
+y_mean.columns = ["Indikator", "Rata-rata"]
+
+fig_y = px.line(
+    y_mean,
+    x="Indikator",
+    y="Rata-rata",
+    markers=True,
+    title="Tingkat Akurasi Navigasi"
+)
+
+fig_y.update_layout(
+    yaxis_range=[0,5],
+    xaxis_title="Indikator",
+    yaxis_title="Rata-rata Skor"
+)
+
+st.plotly_chart(fig_y, use_container_width=True)
 
 st.success("""
-User-Generated Metadata terbukti memiliki pengaruh positif terhadap akurasi navigasi.
-Dashboard ini menunjukkan bahwa peningkatan kualitas informasi pengguna dapat meningkatkan efisiensi layanan transportasi berbasis aplikasi secara signifikan.
+Hasil visualisasi menunjukkan bahwa informasi tambahan
+dari pengguna membantu meningkatkan akurasi navigasi
+dan mengurangi misleading points.
 """)
+
+st.markdown("---")
+
+# =========================================================
+# ANALISIS HUBUNGAN VARIABEL
+# =========================================================
+
+st.header("🔗 Analisis Pengaruh Variabel")
+
+fig_relation = px.scatter(
+    filtered_df,
+    x="Rata_X",
+    y="Rata_Y",
+    trendline="ols",
+    title="Hubungan User-Generated Metadata dan Akurasi Navigasi",
+    labels={
+        "Rata_X": "User-Generated Metadata",
+        "Rata_Y": "Akurasi Navigasi"
+    }
+)
+
+st.plotly_chart(fig_relation, use_container_width=True)
+
+st.markdown("""
+### Interpretasi Hasil
+
+Semakin tinggi efektivitas *User-Generated Metadata*,
+maka semakin tinggi tingkat akurasi navigasi
+pada layanan transportasi berbasis aplikasi.
+""")
+
+st.markdown("---")
+
+# =========================================================
+# HASIL SMARTPLS
+# =========================================================
+
+st.header("📈 Hasil Analisis SmartPLS")
+
+pls_result = pd.DataFrame({
+    "Hubungan Variabel": [
+        "User Generated Metadata → Akurasi Navigasi"
+    ],
+    "Path Coefficient": [0.815],
+    "T Statistics": [7.801],
+    "P-Value": [0.000]
+})
+
+st.dataframe(pls_result, use_container_width=True)
+
+st.success("""
+Hasil SmartPLS menunjukkan bahwa variabel
+User-Generated Metadata berpengaruh positif
+dan signifikan terhadap Akurasi Navigasi.
+""")
+
+# =========================================================
+# VALIDITAS DAN RELIABILITAS
+# =========================================================
+
+st.header("✅ Uji Validitas dan Reliabilitas")
+
+validity_df = pd.DataFrame({
+    "Variabel": [
+        "Akurasi Navigasi",
+        "User Generated Metadata"
+    ],
+    "Cronbach Alpha": [0.914, 0.949],
+    "Composite Reliability": [0.939, 0.962],
+    "AVE": [0.795, 0.834]
+})
+
+st.dataframe(validity_df, use_container_width=True)
+
+st.info("""
+Seluruh variabel memenuhi syarat validitas
+dan reliabilitas karena nilai Cronbach Alpha > 0.70
+dan AVE > 0.50.
+""")
+
+st.markdown("---")
+
+# =========================================================
+# OUTER LOADING
+# =========================================================
+
+st.header("📋 Outer Loading")
+
+outer_loading = pd.DataFrame({
+    "Indikator": [
+        "X1.1",
+        "X1.2",
+        "X1.3",
+        "X1.4",
+        "X1.6",
+        "Y2",
+        "Y3",
+        "Y4",
+        "Y6"
+    ],
+    "Outer Loading": [
+        0.958,
+        0.869,
+        0.950,
+        0.956,
+        0.826,
+        0.820,
+        0.943,
+        0.908,
+        0.893
+    ]
+})
+
+fig_outer = px.bar(
+    outer_loading,
+    x="Indikator",
+    y="Outer Loading",
+    color="Outer Loading",
+    text_auto=".3f",
+    title="Nilai Outer Loading Variabel Penelitian"
+)
+
+fig_outer.update_layout(
+    yaxis_range=[0,1.1]
+)
+
+st.plotly_chart(fig_outer, use_container_width=True)
+
+st.info("""
+Seluruh indikator yang digunakan pada dashboard
+memiliki nilai outer loading > 0.70 sehingga dinyatakan valid.
+Indikator X1.5, Y1, dan Y5 tidak digunakan karena
+tidak memenuhi kriteria validitas konvergen.
+""")
+
+st.markdown("---")
+
+# =========================================================
+# INSIGHT PENELITIAN
+# =========================================================
+
+st.header("💡 Insight Penelitian")
+
+highest_x = x_mean.loc[x_mean["Rata-rata"].idxmax()]
+highest_y = y_mean.loc[y_mean["Rata-rata"].idxmax()]
+
+st.write(f"""
+- Indikator metadata tertinggi terdapat pada
+**{highest_x['Indikator']}**
+dengan rata-rata skor **{round(highest_x['Rata-rata'],2)}**.
+
+- Indikator akurasi navigasi tertinggi terdapat pada
+**{highest_y['Indikator']}**
+dengan rata-rata skor **{round(highest_y['Rata-rata'],2)}**.
+
+- Hasil penelitian menunjukkan bahwa metadata pengguna
+memiliki kontribusi penting dalam meningkatkan
+akurasi navigasi digital.
+""")
+
+st.markdown("---")
+
+# =========================================================
+# KESIMPULAN
+# =========================================================
+
+st.header("📌 Kesimpulan")
+
+st.write("""
+Dashboard ini membantu proses visualisasi
+dan evaluasi hasil penelitian mengenai pengaruh
+User-Generated Metadata terhadap Akurasi Navigasi
+pada layanan transportasi berbasis aplikasi.
+
+Berdasarkan hasil analisis SmartPLS,
+User-Generated Metadata terbukti memiliki
+pengaruh positif dan signifikan terhadap
+akurasi navigasi dengan nilai path coefficient 0.815
+dan P-value 0.000.
+
+Pemanfaatan landmark, deskripsi lokasi,
+dan petunjuk arah tambahan membantu meningkatkan
+ketepatan identifikasi lokasi dan mengurangi
+misleading points.
+""")
+
+st.markdown("---")
+
+st.caption("Smart Navigation Accuracy Monitoring Dashboard © 2026")
